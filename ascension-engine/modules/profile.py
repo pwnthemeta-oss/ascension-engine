@@ -165,4 +165,26 @@ def _handle_grind(bot, update):
 # ----------------------------------------------------
 def _show_power_stats(bot, update):
     query = update.callback_query
-    user_id_
+    user_id = query.from_user.id
+    user = get_user(user_id)
+
+    streak = user.get("streak", 0)
+    multiplier = 1 + (streak // 10) * 0.1
+
+    text = (
+        "💠 *POWER STATS*\n\n"
+        f"⚡ XP: {user.get('xp', 0)}\n"
+        f"🔥 Streak: {streak} days\n"
+        f"🏅 Rank: {user.get('rank')}\n"
+        f"🔋 Grind Multiplier: x{multiplier}\n\n"
+        "Your stats influence your entire Ascension journey."
+    )
+
+    text = render_text(user, text)
+
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("⬅️ Back", callback_data="prof_main")],
+        [InlineKeyboardButton("🏠 Menu", callback_data="menu_main")]
+    ])
+
+    query.edit_message_text(text, parse_mode="Markdown", reply_markup=keyboard)
