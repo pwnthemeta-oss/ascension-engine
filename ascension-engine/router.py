@@ -64,6 +64,9 @@ def handle_update(bot, update: Update):
         if update.callback_query:
             data = update.callback_query.data
             user_id = update.callback_query.from_user.id
+            if data.startswith("dice_"):
+    return handle_dice_battle_callback(bot, update)
+
 
             init_user(user_id)  # ensure user exists
 
