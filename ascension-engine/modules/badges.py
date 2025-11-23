@@ -1,167 +1,116 @@
 """
 modules/badges.py
-Full badge system for PWN Ascension Engine.
-Handles:
-- Badge definitions
-- Unlock conditions
-- Progress tracking
-- Weekly leaderboard badge
+Badge UI screens for PWN Ascension Engine.
+
+Includes:
+- Badge list screen
+- Badge details screen
+- Progress bars
 """
 
-from database import load_db, save_db, get_user
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from database import get_user
+from ui.components import render_text
+from modules.badges import get_badge_definitions, get_badge_progress
 
 
 # ---------------------------------------------------------
-# BADGE DEFINITIONS
+# MAIN BADGES MENU
 # ---------------------------------------------------------
-def get_badge_definitions():
-    """Full list of permanent badges in the PWN universe."""
-    return {
-        "Initiate": {
-            "type": "onboarding",
-            "required": 1,
-            "description": "Complete onboarding."
-        },
-        "Cracked": {
-            "type": "xp",
-            "required": 10000,
-            "description": "Reach 10,000 XP."
-        },
-        "Grinder": {
-            "type": "daily_grinds",
-            "required": 50,
-            "description": "Perform 50 grinds in one day."
-        },
-        "Dominator": {
-            "type": "weekly_top3",
-            "required": 1,
-            "description": "Finish in the weekly Top 3."
-        },
-        "Keeper": {
-            "type": "streak",
-            "required": 30,
-            "description": "Maintain a 30-day streak."
-        },
-        "No Life": {
-            "type": "xp",
-            "required": 100000,
-            "description": "Reach 100,000 XP."
-        },
-        "Trader": {
-            "type": "special",
-            "required": 1,
-            "description": "Quarterly trader badge (manual)."
-        },
-        "Machine": {
-            "type": "special",
-            "required": 1,
-            "description": "Quarterly grinder badge (manual)."
-        },
-    }
-    
+def handle_badges_callback(bot, update):
+    query = update.callback_query
+    data = query.data
+    user_id = query.from_user.id
 
-# ---------------------------------------------------------
-# PROGRESS DISPLAY HELPER
-# ---------------------------------------------------------
-def get_badge_progress(user, badge_name):
-    """Return text progress for a locked badge."""
+    if data == "badge_main":
+        return _show_badge_list(bot, update)
 
-    defs = get_badge_definitions()
-    badge = defs.get(badge_name)
-    if not badge:
-        return "Unknown badge"
+    if data.startswith("badge_detail_"):
+        badge_name = data.replace("badge_detail_", "")
+        return _show_badge_detail(bot, update, badge_name)
 
-    btype = badge["type"]
-    required = badge["required"]
-
-    if btype == "xp":
-        return f"{user.get('xp', 0)}/{required} XP"
-
-    if btype == "streak":
-        return f"{user.get('streak', 0)}/{required} days"
-
-    if btype == "daily_grinds":
-        return f"{user.get('grinds_today', 0)}/{required} grinds"
-
-    if btype == "weekly_top3":
-        return "Finish Top 3 in a weekly leaderboard"
-
-    if btype == "onboarding":
-        return "Complete onboarding"
-
-    return "Progress unavailable"
+    if data == "badge_back":
+        return _show_badge_list(bot, update)
 
 
 # ---------------------------------------------------------
-# CHECK FOR NEW BADGES
+# BADGE LIST SCREEN
 # ---------------------------------------------------------
-def check_for_new_badges(user_id: int):
-    """
-    Return badge name if the user unlocked a new badge.
-    Called after grind, onboarding, weekly reset, etc.
-    """
+def _show_badge_list(bot, update):
+    query = update.callback_query
+    user_id = query.from_user.id
+    user = get_user(user_id)
 
-    db = load_db()
-    uid = str(user_id)
+    badge_defs = get_badge_definitions()
+    unlocked = user.get("badges", [])
 
-    if uid not in db:
-        return None
+    text = "🏅 *YOUR BADGES*\n\n"
 
-    user = db[uid]
+    if not unlocked:
+        text += "_You haven't unlocked any badges yet._\n"
+    else:
+        for b in unlocked:
+            text += f"🟦 *{b}*\n"
+
+    text = render_text(user, text)
+
+    # Build button grid
+    keyboard_rows = []
+    for badge_name in badge_defs.keys():
+        keyboard_rows.append([
+            InlineKeyboardButton(
+                badge_name,
+                callback_data=f"badge_detail_{badge_name}"
+            )
+        ])
+
+    keyboard_rows.append([InlineKeyboardButton("🏠 Menu", callback_data="menu_main")])
+    keyboard_rows.append([InlineKeyboardButton("🧿 Profile", callback_data="prof_main")])
+
+    keyboard = InlineKeyboardMarkup(keyboard_rows)
+
+    query.edit_message_text(
+        text=text,
+        parse_mode="Markdown",
+        reply_markup=keyboard
+    )
+
+
+# ---------------------------------------------------------
+# BADGE DETAIL SCREEN
+# ---------------------------------------------------------
+def _show_badge_detail(bot, update, badge_name):
+    query = update.callback_query
+    user_id = query.from_user.id
+    user = get_user(user_id)
     unlocked = user.get("badges", [])
 
     defs = get_badge_definitions()
+    info = defs.get(badge_name, {})
 
-    for name, badge in defs.items():
+    title = info.get("title", badge_name)
+    desc = info.get("description", "")
+    required_type = info.get("type")
 
-        # Already unlocked → skip
-        if name in unlocked:
-            continue
+    text = f"📜 *{badge_name}*\n\n{desc}\n\n"
 
-        btype = badge["type"]
-        required = badge["required"]
+    # If unlocked
+    if badge_name in unlocked:
+        text += "✅ *Unlocked*\n"
+    else:
+        # Progress display
+        progress = get_badge_progress(user, badge_name)
+        text += f"Progress: `{progress}`\n"
 
-        # ---- CHECK TYPES ----
+    text = render_text(user, text)
 
-        # Onboarding
-        if btype == "onboarding" and user.get("onboarding_complete"):
-            _unlock_badge(user, name, db)
-            return name
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("↩️ Back", callback_data="badge_main")],
+        [InlineKeyboardButton("🏠 Menu", callback_data="menu_main")],
+    ])
 
-        # XP
-        if btype == "xp" and user.get("xp", 0) >= required:
-            _unlock_badge(user, name, db)
-            return name
-
-        # Streak
-        if btype == "streak" and user.get("streak", 0) >= required:
-            _unlock_badge(user, name, db)
-            return name
-
-        # Daily grinds
-        if btype == "daily_grinds" and user.get("grinds_today", 0) >= required:
-            _unlock_badge(user, name, db)
-            return name
-
-        # Weekly leaderboard top 3 badge
-        if btype == "weekly_top3" and user.get("weekly", {}).get("top3", False):
-            _unlock_badge(user, name, db)
-            return name
-
-        # Manual special badge (Trader, Machine)
-        if btype == "special" and user.get(f"badge_{name.lower()}", False):
-            _unlock_badge(user, name, db)
-            return name
-
-    # No badges unlocked
-    return None
-
-
-# ---------------------------------------------------------
-# INTERNAL: UNLOCK BADGE
-# ---------------------------------------------------------
-def _unlock_badge(user, badge_name, db):
-    """Add badge to user + save."""
-    user["badges"].append(badge_name)
-    db[str(user["id"])] = user
-    save_db(db)
+    query.edit_message_text(
+        text=text,
+        parse_mode="Markdown",
+        reply_markup=keyboard
+    )
