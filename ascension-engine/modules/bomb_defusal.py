@@ -108,20 +108,18 @@ def _process_choice(bot, update, chosen, safe_index):
     uid = str(user_id)
 
     # Correct?
-    if chosen == safe_index:
-        db[uid]["xp"] += SAFE_XP
-        save_db(db)
-
-        text = render_text(user,
-            f"🟩 *SAFE BOMB!* You guessed correctly!\n\n"
-            f"+{SAFE_XP} XP"
-        )
     else:
-        text = render_text(user,
-            "💥 *BOOM!*\n\n"
-            "You picked an exploding bomb.\n"
-            "+0 XP"
-        )
+    # WRONG BOMB → Lose 5 XP (but never go below 0)
+    current_xp = db[uid].get("xp", 0)
+    new_xp = max(0, current_xp - 5)
+    db[uid]["xp"] = new_xp
+    save_db(db)
+
+    text = render_text(user,
+        "💥 *BOOM!*\n\n"
+        "You picked an exploding bomb.\n"
+        "−5 XP"
+    )
 
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🔁 Play Again", callback_data="bomb_start")],
