@@ -31,6 +31,7 @@ def handle_menu_command(bot, update):
         [InlineKeyboardButton("📅 Challenges", callback_data="ch_main")],
         [InlineKeyboardButton("❓ Help", callback_data="help_main")],
         [InlineKeyboardButton("⚙️ Settings", callback_data="set_main")],
+        [InlineKeyboardButton("🎲 Dice Battle", callback_data="dice_start")],
     ])
 
     bot.send_message(
