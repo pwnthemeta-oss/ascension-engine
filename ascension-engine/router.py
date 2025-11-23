@@ -1,4 +1,5 @@
 """
+from modules.dice_battle import handle_dice_battle_callback
 router.py
 Unified router for ALL Telegram updates (messages + callbacks)
 FULL VERSION WITH ALL COMMAND HANDLERS
